@@ -35,7 +35,7 @@ def getPlayers(league, year):
     """
    
     url = 'https://www.eliteprospects.com/league/' + league + '/stats/' + year + '?page='
-    print('Collects data from ' + 'https://www.eliteprospects.com/league/' + league + '/stats/' + year)
+    # print('Collects data from ' + 'https://www.eliteprospects.com/league/' + league + '/stats/' + year)
     
     # Return list with all plyers for season in link     
     players = []
@@ -100,11 +100,52 @@ def getPlayers(league, year):
     return df_players
 
 
+def getTeamStat(dfplayers):
+    """
+    Create dataframe with aggregated statistics by team, season and position (forward/defenceman) 
+    Input is dataframe created with function getPlayers
+    """
+
+    dfplayers[['gp', 'g', 'a', 'tp', 'pim', '+/-']] = dfplayers[['gp', 'g', 'a', 'tp', 'pim', '+/-']].apply(pd.to_numeric, errors='coerce')
+
+    df_teamstat = dfplayers.groupby(['team', 'season', 'fw_def'])[['gp','g', 'a', 'tp', 'pim']].sum().reset_index()
+
+    df_teamstat['avg_g_team'] = df_teamstat['g'] / df_teamstat['gp'] 
+    df_teamstat['avg_a_team'] = df_teamstat['a'] / df_teamstat['gp'] 
+    df_teamstat['avg_tp_team'] = df_teamstat['tp'] / df_teamstat['gp'] 
+    df_teamstat['avg_pim_team'] = df_teamstat['pim'] / df_teamstat['gp'] 
+
+    df_teamstat['avg_+/-_team'] = dfplayers.groupby(['team', 'season', 'fw_def'])['+/-'].mean().values
+    df_teamstat['nbr_players'] = dfplayers.groupby(['team', 'season', 'fw_def'])['+/-'].count().values
+
+    return df_teamstat 
+
+
+def getSeasonStat(dfplayers):
+    """
+    Create dataframe with aggregated statistics by season and position (forward/defenceman) 
+    Input is dataframe created with function getPlayers
+    """
+
+    dfplayers[['gp', 'g', 'a', 'tp', 'pim', '+/-']] = dfplayers[['gp', 'g', 'a', 'tp', 'pim', '+/-']].apply(pd.to_numeric, errors='coerce')
+
+    df_seasonstat = dfplayers.groupby(['season', 'fw_def'])[['gp','g', 'a', 'tp', 'pim']].sum().reset_index()
+
+    df_seasonstat['avg_g_season'] = df_seasonstat['g'] / df_seasonstat['gp'] 
+    df_seasonstat['avg_a_season'] = df_seasonstat['a'] / df_seasonstat['gp'] 
+    df_seasonstat['avg_tp_season'] = df_seasonstat['tp'] / df_seasonstat['gp'] 
+    df_seasonstat['avg_pim_season'] = df_seasonstat['pim'] / df_seasonstat['gp'] 
+
+    df_seasonstat['avg_+/-_team'] = dfplayers.groupby(['season', 'fw_def'])['+/-'].mean().values
+    df_seasonstat['nbr_players'] = dfplayers.groupby(['season', 'fw_def'])['+/-'].count().values
+
+    return df_seasonstat     
+
+
 def getPlayerMetadata(dfplayers):
     """
     Create dataframe with metadata by players. 
     Input is dataframe created with function getPlayers
-    Accepts input from getPlayers()
     """
     
     # Get unique players and write to csv
@@ -154,44 +195,33 @@ def getPlayerStats(playerlinks):
             
         # Wait 3 seconds before going to next
         time.sleep(3)
-        
-        print(index, 'of total ', playerlinks.size)
-        bar.update(index)
-        print('rows current: ', pd.concat(data)['link'].size)
-        
+         
     playerStats=pd.concat(data)
     
     playerStats.rename(columns={ "S":"season"}, inplace=True)
-    
-    bar.finish()
         
     return playerStats
 
 
-def dataprep_players(playerstats, league_mapping, players):
+def dataprep_players(playerstats):
     """
-    Takes series of playerlinks to eliteprospect-profiles, 
-    Return dataframe with stats by player and season
+    Takes data from players, clean it and return data frame that can be used for further analysis
     """ 
     
     # Make column names lower
     playerstats.columns = map(str.lower, playerstats.columns)
-    league_mapping.columns = map(str.lower, league_mapping.columns)
-    players.columns = map(str.lower, players.columns)
-    
-    
-    #  Remove playoff data and add leagues, playername and position
-    df_stats = playerstats.iloc[:,[17, 0,1,2,3,4,5,6,7,8]]
-    
+      
+    #  Save relevant columns and remove rows with info about international matches
+    df_stats = playerstats.copy()
+    df_stats = df_stats.iloc[:,[17, 0,1,2,3,4,5,6,7,8]]
+    df_stats.reset_index(drop=True)
+
+    # Turn into numeric
     df_stats[['gp', 'g', 'a', 'tp', 'pim', '+/-']] = df_stats[['gp', 'g', 'a', 'tp', 'pim', '+/-']].apply(pd.to_numeric, errors='coerce')
-    
-    df_stats = pd.merge(df_stats, league_mapping, on='league', how='left')
-    df_stats = pd.merge(df_stats, players[['link', 'fw_def', 'playername']], on=['link'], how='left')
-    
+
     # Remove international data
     df_stats = df_stats[~df_stats['league'].str.contains("international",case=False, na=False)]
-    df_stats = df_stats[~df_stats['country'].str.contains("international",case=False, na=False)]
-    
+
     # Mark primary team each season, where player played most games
     df_stats = df_stats.sort_values(['link', 'season', 'gp'], ascending = [True, True, False])
     
@@ -211,56 +241,11 @@ def dataprep_players(playerstats, league_mapping, players):
     df_stats_primary['league_seasons'] = df_stats_primary.groupby(['link', 'league']).cumcount() + 1
     df_stats_primary['team_seasons'] = df_stats_primary.groupby(['link', 'team']).cumcount() + 1
     
-    
     # Average statistics by games
     df_stats_primary['avg_g'] = df_stats_primary['g'] / df_stats_primary['gp']
     df_stats_primary['avg_a'] = df_stats_primary['a'] / df_stats_primary['gp']
     df_stats_primary['avg_tp'] = df_stats_primary['tp'] / df_stats_primary['gp']
     df_stats_primary['avg_pim'] = df_stats_primary['pim'] / df_stats_primary['gp']
-    
-    # Add metrics on team level (for comparison)
-    df_stats_primary['avg_g_team'] = df_stats_primary.groupby(['team', 'season', 'fw_def'])['g'].transform('sum') / df_stats_primary.groupby(['team', 'season', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_a_team'] = df_stats_primary.groupby(['team', 'season', 'fw_def'])['a'].transform('sum') / df_stats_primary.groupby(['team', 'season', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_tp_team'] = df_stats_primary.groupby(['team', 'season', 'fw_def'])['tp'].transform('sum') / df_stats_primary.groupby(['team', 'season', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_pim_team'] = df_stats_primary.groupby(['team', 'season', 'fw_def'])['pim'].transform('sum') / df_stats_primary.groupby(['team', 'season', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_+/-_team'] = df_stats_primary.groupby(['team', 'season', 'fw_def'])['+/-'].transform('mean')
-    
-    # Add metrics on season level (for comparison)
-    df_stats_primary['avg_g_season'] = df_stats_primary.groupby(['season', 'league', 'fw_def'])['g'].transform('sum') / df_stats_primary.groupby(['season', 'league', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_a_season'] = df_stats_primary.groupby(['season', 'league', 'fw_def'])['a'].transform('sum') / df_stats_primary.groupby(['season', 'league', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_tp_season'] = df_stats_primary.groupby(['season', 'league', 'fw_def'])['tp'].transform('sum') / df_stats_primary.groupby(['season', 'league', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_pim_season'] = df_stats_primary.groupby(['season', 'league', 'fw_def'])['pim'].transform('sum') / df_stats_primary.groupby(['season', 'league', 'fw_def'])['gp'].transform('sum')
-    df_stats_primary['avg_+/-_season'] = df_stats_primary.groupby(['season', 'league', 'fw_def'])['+/-'].transform('mean')
-    
-    # Add comparison player vs team
-    df_stats_primary['g_vs_team'] = (df_stats_primary['avg_g'] - df_stats_primary['avg_g_team']) / df_stats_primary['avg_g_team']
-    df_stats_primary['a_vs_team'] = (df_stats_primary['avg_a'] - df_stats_primary['avg_a_team']) / df_stats_primary['avg_a_team']
-    df_stats_primary['tp_vs_team'] = (df_stats_primary['avg_tp'] - df_stats_primary['avg_tp_team']) / df_stats_primary['avg_tp_team']
-    df_stats_primary['pim_vs_team'] = (df_stats_primary['avg_pim'] - df_stats_primary['avg_pim_team']) / df_stats_primary['avg_pim_team']
-    df_stats_primary['+/-_vs_team'] = (df_stats_primary['+/-'] - df_stats_primary['avg_+/-_team']) 
-    
-    # Add comparison player vs total
-    df_stats_primary['g_vs_total'] = (df_stats_primary['avg_g'] - df_stats_primary['avg_g_season']) / df_stats_primary['avg_g_season']
-    df_stats_primary['a_vs_total'] = (df_stats_primary['avg_a'] - df_stats_primary['avg_a_season']) / df_stats_primary['avg_a_season']
-    df_stats_primary['tp_vs_total'] = (df_stats_primary['avg_tp'] - df_stats_primary['avg_tp_season']) / df_stats_primary['avg_tp_season']
-    df_stats_primary['pim_vs_total'] = (df_stats_primary['avg_pim'] - df_stats_primary['avg_pim_season']) / df_stats_primary['avg_pim_season']
-    df_stats_primary['+/-_vs_total'] = (df_stats_primary['+/-'] - df_stats_primary['avg_+/-_season']) 
-    
-    # Add comparison team vs total
-    df_stats_primary['g_team_vs_total'] = (df_stats_primary['avg_g_team'] - df_stats_primary['avg_g_season']) / df_stats_primary['avg_g_season']
-    df_stats_primary['a_team_vs_total'] = (df_stats_primary['avg_a_team'] - df_stats_primary['avg_a_season']) / df_stats_primary['avg_a_season']
-    df_stats_primary['tp_team_vs_total'] = (df_stats_primary['avg_tp_team'] - df_stats_primary['avg_tp_season']) / df_stats_primary['avg_tp_season']
-    df_stats_primary['pim_team_vs_total'] = (df_stats_primary['avg_pim_team'] - df_stats_primary['avg_pim_season']) / df_stats_primary['avg_pim_season']
-    df_stats_primary['+/-_team_vs_total'] = (df_stats_primary['avg_+/-_team'] - df_stats_primary['avg_+/-_season']) 
-    
-    
-    # Add data for previous season
-    df_stats_primary = df_stats_primary.sort_values(['link', 'season'])
-    
-    cols_to_shift = df_stats_primary.columns[~df_stats_primary.columns.isin(['player', 'link', 'captain', 'season', 
-                                                                             'league_season', 'primary_team', 'fw_def'])]
-    
-    df_stats_primary[cols_to_shift + '_prev'] =  df_stats_primary.groupby(['link'])[cols_to_shift].shift(1)
     
     return df_stats_primary
     
