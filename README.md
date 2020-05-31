@@ -44,4 +44,4 @@ Takes series of playerlinks as input. Playerlinks are also included in return ou
 
 
 ## How to use
-See this notebook for examples of how to use the package, and in what order you can run the functions. 
+See [this notebook](https://github.com/msjoelin/eliteprospect_scraper/blob/master/sample_workbook.ipynb) for examples of how to use the package, and in what order you can run the functions. 
