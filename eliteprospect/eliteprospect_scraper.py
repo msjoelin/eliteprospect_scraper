@@ -203,8 +203,11 @@ def getPlayerStats(playerlinks):
         
         print(str(index+1), 'of', str(playerlinks.size), 'players imported, dataset contains', 
               str(collected_rows), 'rows', end="\r")
+        
+        playerStats=pd.concat(data)
+        playerStats.rename(columns={ "S":"season"}, inplace=True)
        
-    return data
+    return playerStats
 
 
 def dataprep_players(playerstats):
