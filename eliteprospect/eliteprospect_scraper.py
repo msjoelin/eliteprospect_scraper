@@ -167,40 +167,44 @@ def getPlayerStats(playerlinks):
     Return dataframe with stats by player and season
     """    
     
+    # Name of table to get data from
+    tablename = "table table-striped table-condensed table-sortable player-stats skater-stats highlight-stats"
+    
     data=[]
-   
+    collected_rows=0
+
     # Loop over all players
     for index,link in enumerate(playerlinks):
-        
+
         page = requests.get(link)
         
         # Get data for player stats
         soup = BeautifulSoup(page.content, "html.parser")    
-        stats_table = soup.find( "table", {"class":"table table-striped table-condensed table-sortable player-stats highlight-stats"} )
-        
+        stats_table = soup.find( "table", {"class": tablename} )
+
         # If html-parser didnt work  -try again
         if stats_table is None:
             soup = BeautifulSoup(page.content, "html.parser")    
-            stats_table = soup.find( "table", {"class":"table table-striped table-condensed table-sortable player-stats highlight-stats"} )
-        
+            stats_table = soup.find( "table", {"class":tablename} )
+
         if stats_table is not None: 
             stats = tableDataText(stats_table)
-            
-            # Fill season data to include all rows
+
+            # Fill season data to include all row
             stats['S'] = stats['S'].replace('', np.nan).ffill(axis=0)
             # Add link and player data
             stats['link'] = link
             
             data.append(stats)
-            
-        # Wait 3 seconds before going to next
+            collected_rows = collected_rows+len(stats)
+
+            # Wait 3 seconds before going to next
         time.sleep(3)
-         
-    playerStats=pd.concat(data)
-    
-    playerStats.rename(columns={ "S":"season"}, inplace=True)
         
-    return playerStats
+        print(str(index+1), 'of', str(playerlinks.size), 'players imported, dataset contains', 
+              str(collected_rows), 'rows', end="\r")
+       
+    return data
 
 
 def dataprep_players(playerstats):
