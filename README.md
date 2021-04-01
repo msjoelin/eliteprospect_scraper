@@ -36,9 +36,7 @@ Takes series of playerlinks as input. Playerlinks are also included in return ou
 ```ep.getPlayerStats(["https://eliteprospects.com/player/2050/mattias-ritola"])```
 
 ### dataprep_players(playerstats, league_mapping, players):
-
-```help(ep)```
- dataprep_players(playerstats, league_mapping, players)
+```dataprep_players(playerstats, league_mapping, players)```
         Takes series of playerlinks to eliteprospect-profiles, 
         Return dataframe with stats by player and season
 
