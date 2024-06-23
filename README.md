@@ -15,15 +15,15 @@ See description of functions in package with
 Functions can be used together and input and output is linked. 
 
 ## Functions
-Description of functions contained in package. Ordered in 
+Description of functions contained in package. 
 
 ### getPlayers(league, year)
 Get all players for specific year and league; returns dataframe. 
 * League: valid league [from eliteprospects](https://www.eliteprospects.com/leagues)
-* year: valid combination of year in format 2015-16, 2016-17 etc.  
+* year: valid combination of year in format 2015-2016, 2016-2017 etc.  
 
 Example:  
-```getPlayers('shl', '2015-16')```  
+```getPlayers('shl', '2015-2016')```  
 
 ### getPlayerMetadata(dfplayers)
 Create dataframe with metadata by players.  
