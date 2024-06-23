@@ -10,6 +10,17 @@ from bs4  import BeautifulSoup
 import requests
 import time
 from datetime import datetime 
+import re
+
+# Used to grab the part where javascript is used to render tables 
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+
+
 
 # Extract data from table - return list with rows
 def tableDataText(table):
@@ -31,8 +42,22 @@ def tableDataText(table):
 def getPlayers(league, year):  
     """
     Get all players for specific year and league; returns dataframe
-    League input in format '2018-19'
+    League input in format '2018-2019'
     """
+
+    # List of valid leagues
+    valid_leagues = ["shl", "allsvenskan", "division-1", "division-2", "liiga", "nla", "del", "khl", "ebel", 
+                     "czech", "slovakia", "latvia", "nhl", "ahl", "echl", "sphl", "lnah", "fphl", "ncaa"]
+    
+    # Validate league
+    if league not in valid_leagues:
+        raise ValueError(f"Invalid league. Valid leagues are: {', '.join(valid_leagues)}")
+    
+    # Validate year format - it has to be in format '2020-2021'
+    if not re.match(r"^\d{4}-\d{4}$", year):
+        raise ValueError("Invalid year format. Year must be in format '1234-1234'")
+
+
    
     url = 'https://www.eliteprospects.com/league/' + league + '/stats/' + year + '?page='
     # print('Collects data from ' + 'https://www.eliteprospects.com/league/' + league + '/stats/' + year)
@@ -166,48 +191,57 @@ def getPlayerStats(playerlinks):
     Takes series of playerlinks to eliteprospect-profiles, 
     Return dataframe with stats by player and season
     """    
+    # Set up Chrome options
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Ensure GUI is off
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    # Set up the WebDriver
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     
-    # Name of table to get data from
-    tablename = "table table-striped table-condensed table-sortable player-stats skater-stats highlight-stats"
-    
-    data=[]
+    #url = ["https://www.eliteprospects.com/player/29626/filip-forsberg", "https://www.eliteprospects.com/player/2050/mattias-ritola"]
+
+    # Initiate variables 
+    tablename = "SortTable_table__jnnJk"
+    data_players=[]
     collected_rows=0
 
     # Loop over all players
     for index,link in enumerate(playerlinks):
 
-        page = requests.get(link)
-        
-        # Get data for player stats
-        soup = BeautifulSoup(page.content, "html.parser")    
-        stats_table = soup.find( "table", {"class": tablename} )
+        # Open the webpage and wait for the table to load
+        driver.get(link)
+        time.sleep(3)  
 
-        # If html-parser didnt work  -try again
-        if stats_table is None:
-            soup = BeautifulSoup(page.content, "html.parser")    
-            stats_table = soup.find( "table", {"class":tablename} )
+        # Get the page source after JavaScript has executed, parse HTML
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, 'html.parser')
 
-        if stats_table is not None: 
-            stats = tableDataText(stats_table)
+        # Find the table element with the specified class
+        table = soup.find('table', class_=tablename)
 
-            # Fill season data to include all row
+        if table:
+            stats = tableDataText(table)
+            # Fill season data to include all row ( there are empty rows if one player had more teams for one season)
             stats['S'] = stats['S'].replace('', np.nan).ffill(axis=0)
             # Add link and player data
             stats['link'] = link
-            
-            data.append(stats)
+                
+            # append info to the data players total set 
+            data_players.append(stats)
             collected_rows = collected_rows+len(stats)
 
-            # Wait 3 seconds before going to next
-        time.sleep(3)
-        
-        print(str(index+1), 'of', str(playerlinks.size), 'players imported, dataset contains', 
-              str(collected_rows), 'rows', end="\r")
-        
-        playerStats=pd.concat(data)
-        playerStats.rename(columns={ "S":"season"}, inplace=True)
-       
+    # When loop finishes, quit driver
+    driver.quit()
+    
+    # Make a dataframe and return this as output
+    playerStats=pd.concat(data_players)
+    playerStats.rename(columns={ "S":"season"}, inplace=True)
+
     return playerStats
+
+    
 
 
 def dataprep_players(playerstats):
