@@ -8,7 +8,7 @@ with open('HISTORY.md') as history_file:
 
 setup_args = dict(
     name='eliteprospect_scraper',
-    version='1.0',
+    version='1.1',
     description='Functions to scrape ice hockey data from eliteprospects',
     long_description_content_type="text/markdown",
     long_description=README + '\n\n' + HISTORY,
@@ -27,7 +27,6 @@ install_requires = [
     'bs4',
     'datetime',
     'selenium',
-    're',
     'requests'
 ]
 
