@@ -2,3 +2,4 @@ build/
 dist/
 eliteprospect_scraper.egg-info/
 eliteprospect/__pycache__/eliteprospect_scraper.cpython-38.pyc
+eliteprospect/__pycache__/__init__.cpython-38.pyc
