@@ -8,7 +8,7 @@ with open('HISTORY.md') as history_file:
 
 setup_args = dict(
     name='eliteprospect_scraper',
-    version='1.1',
+    version='1.2',
     description='Functions to scrape ice hockey data from eliteprospects',
     long_description_content_type="text/markdown",
     long_description=README + '\n\n' + HISTORY,
@@ -16,7 +16,7 @@ setup_args = dict(
     packages=find_packages(),
     author='Marcus Sjölin',
     author_email='marcussjolin89@gmail.com',
-    keywords=['ice hockey', 'scraping', 'sport analytics', 'datetime', 'time', 'requests'],
+    keywords=['ice hockey', 'scraping', 'sport analytics', 'eliteprospects'],
     url='https://github.com/msjoelin/eliteprospect_scraper',
     download_url='https://pypi.org/project/eliteprospect_scraper/'
 )

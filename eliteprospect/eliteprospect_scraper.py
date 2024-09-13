@@ -21,15 +21,14 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-
-# Extract data from table - return list with rows
+# Helper function to extract data from table - return list with rows
 def tableDataText(table):
     rows = []
     trs = table.find_all('tr')
 
-    headerow = [td.get_text(strip=True) for td in trs[0].find_all('th')] # header row
-    if headerow: # if there is a header row include first
-        rows.append(headerow)
+    headerrow = [td.get_text(strip=True) for td in trs[0].find_all('th')] # header row
+    if headerrow: # if there is a header row include first
+        rows.append(headerrow)
         trs = trs[1:]
     for tr in trs: # for every table row
         rows.append([td.get_text(strip=True) for td in tr.find_all('td')]) # data row
@@ -46,7 +45,7 @@ def getPlayers(league, year):
     """
 
     # List of valid leagues
-    valid_leagues = ["shl", "allsvenskan", "division-1", "division-2", "liiga", "nla", "del", "khl", "ebel", 
+    valid_leagues = ["shl", "hockeyallsvenskan", "division-1", "division-2", "liiga", "nla", "del", "khl", "ebel", 
                      "czech", "slovakia", "latvia", "nhl", "ahl", "echl", "sphl", "lnah", "fphl", "ncaa"]
     
     # Validate league
@@ -62,9 +61,10 @@ def getPlayers(league, year):
     url = 'https://www.eliteprospects.com/league/' + league + '/stats/' + year + '?page='
     # print('Collects data from ' + 'https://www.eliteprospects.com/league/' + league + '/stats/' + year)
     
-    # Return list with all plyers for season in link     
+    # Initiate list of players   
     players = []
     
+    # Loop over 10 pages. 
     for i in range(1,10):
         page = requests.get(url+str(i))        
         soup = BeautifulSoup(page.content, "html.parser")
@@ -124,6 +124,87 @@ def getPlayers(league, year):
     
     return df_players
 
+def getGoalies(league, year):  
+    """
+    Get all goalies for specific year and league; returns dataframe
+    League input in format '2018-2019'
+    """
+
+    # List of valid leagues
+    valid_leagues = ["shl", "hockeyallsvenskan", "division-1", "division-2", "liiga", "nla", "del", "khl", "ebel", 
+                     "czech", "slovakia", "latvia", "nhl", "ahl", "echl", "sphl", "lnah", "fphl", "ncaa"]
+    
+    # Validate league
+    if league not in valid_leagues:
+        raise ValueError(f"Invalid league. Valid leagues are: {', '.join(valid_leagues)}")
+    
+    # Validate year format - it has to be in format '2020-2021'
+    if not re.match(r"^\d{4}-\d{4}$", year):
+        raise ValueError("Invalid year format. Year must be in format '1234-1234'")
+
+
+   
+    url = 'https://www.eliteprospects.com/league/' + league + '/stats/' + year 
+    # print('Collects data from ' + 'https://www.eliteprospects.com/league/' + league + '/stats/')
+    # No pagination needed for goalies
+    
+    # Initiate list of goalies   
+    goalies = []
+    
+    page = requests.get(url)        
+    soup = BeautifulSoup(page.content, "html.parser")
+    
+    # Get data for tableDataTextplayers table
+    goalies_table = soup.find( "table", {"class":"table table-striped table-sortable goalie-stats highlight-stats season"} )
+    
+    if goalies_table is not None: 
+        df_goalies = tableDataText(goalies_table)
+    
+        if df_goalies['#'].count()>0:
+            # Remove empty rows
+            df_goalies = df_goalies[df_goalies['#']!=''].reset_index(drop=True)
+            
+            # Extract href links in table
+            href_row = []
+            for link in goalies_table.find_all('a'):
+                href_row.append(link.attrs['href'])
+                
+            # Create data frame, rename and only keep links to players
+            df_links = pd.DataFrame(href_row)  
+            df_links.rename(columns={ df_links.columns[0]:"link"}, inplace=True)
+            df_links= df_links[df_links['link'].str.contains("/player/")].reset_index(drop=True)    
+            
+            # Add links to players
+            df_goalies['link']=df_links['link'] 
+            
+            goalies.append(df_goalies)
+            
+            # Wait 3 seconds before going to next
+            time.sleep(3)
+    
+    
+    df_goalies = pd.concat(goalies).reset_index()
+    
+    df_goalies.columns = map(str.lower, df_goalies.columns)
+    
+    # Clean up dataset
+    df_goalies['season'] = year
+    df_goalies['league'] = league
+    
+    df_goalies = df_goalies.drop(['index','#'], axis=1).reset_index(drop=True)
+    
+    df_goalies['playername'] = df_goalies['player'].str.replace(r"\(.*\)","")
+    df_goalies['position'] = 'G'
+    
+    # Adjust columns; transform data
+    team = df_goalies['team'].str.split("“", n=1, expand=True)
+    df_goalies['team'] = team[0]
+    
+    # drop player-column
+    df_goalies.drop(['player'], axis=1)
+    
+    return df_goalies
+
 
 def getTeamStat(dfplayers):
     """
@@ -173,10 +254,10 @@ def getPlayerMetadata(dfplayers):
     Input is dataframe created with function getPlayers
     """
     
-    # Get unique players and write to csv
+    # Get distinct list of players
     playermeta = dfplayers[['link', 'playername', 'fw_def']].drop_duplicates().reset_index(drop=True)
     
-    # Make sure no players have multiple positions over seasons
+    # Make sure no players have multiple positions over seasons. If so, keep the one with most entries
     playermeta['cnt'] = playermeta.groupby(['link', 'playername'])['fw_def'].count().values
     playermeta = playermeta.sort_values(by=['link', 'playername', 'cnt'], ascending=False)
     playermeta['rank'] = playermeta.groupby(['link', 'playername']).cumcount()
@@ -184,6 +265,24 @@ def getPlayerMetadata(dfplayers):
     playermeta = playermeta[playermeta['rank']==0][['link', 'playername', 'fw_def']]
     
     return playermeta
+
+def getGoalieMetadata(dfplayers):
+    """
+    Create dataframe with metadata by goalies. 
+    Input is dataframe created with function getGoalies
+    """
+    
+    # Get distinct list of players
+    goaliemeta = dfplayers[['link', 'playername', 'position']].drop_duplicates().reset_index(drop=True)
+    
+    # Make sure no players have multiple positions over seasons. If so, keep the one with most entries
+    goaliemeta['cnt'] = goaliemeta.groupby(['link', 'playername'])['position'].count().values
+    goaliemeta = goaliemeta.sort_values(by=['link', 'playername', 'cnt'], ascending=False)
+    goaliemeta['rank'] = goaliemeta.groupby(['link', 'playername']).cumcount()
+    
+    goaliemeta = goaliemeta[goaliemeta['rank']==0][['link', 'playername', 'position']]
+    
+    return goaliemeta
 
 
 def getPlayerStats(playerlinks): 
@@ -222,15 +321,18 @@ def getPlayerStats(playerlinks):
         table = soup.find('table', class_=tablename)
 
         if table:
-            stats = tableDataText(table)
-            # Fill season data to include all row ( there are empty rows if one player had more teams for one season)
-            stats['S'] = stats['S'].replace('', np.nan).ffill(axis=0)
-            # Add link and player data
-            stats['link'] = link
-                
-            # append info to the data players total set 
-            data_players.append(stats)
-            collected_rows = collected_rows+len(stats)
+            try:
+                stats = tableDataText(table)
+                # Fill season data to include all row ( there are empty rows if one player had more teams for one season)
+                stats['S'] = stats['S'].replace('', np.nan).ffill(axis=0)
+                # Add link and player data
+                stats['link'] = link
+                    
+                # append info to the data players total set 
+                data_players.append(stats)
+                collected_rows = collected_rows+len(stats)
+            except Exception as e:
+                print(f"An error occurred while processing the table for link {link}: {e}")
 
     # When loop finishes, quit driver
     driver.quit()
